@@ -1,0 +1,18 @@
+# 生成的 / 本机的，不入库
+__pycache__/
+*.py[cod]
+*.spec
+build/
+dist/
+*.exe
+*.bak
+*.log
+
+# 工具在本机生成的明文类快照（来自使用者自己的游戏副本，不入库）
+editors/data/classes/
+
+# 临时产物
+selftest_report.txt
+*_error.txt
+out_vehicle_zip_test.zip
+*.tmp

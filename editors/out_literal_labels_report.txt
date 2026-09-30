@@ -1,0 +1,254 @@
+字面量作用标签报告（editors/gen_literal_labels.py 生成）
+========================================================================
+数据源：
+  伪码  out_pseudo/vehicles/<Car>/<body>/classes/classes/*.java
+  字节码 C:\Games\LASR\vehicles\<Car>\<body>\classes.zip 里的同名 .class
+  校验  editors/lasr_core/flzd.py（解容器）+ editors/lasr_core/tufa.py::Tufa.literals
+  快照  editors/data/classes/<Car>/<body>/<cls>.tufa（优先用，与 zip 条目同一份字节码明文；
+        没有快照才回退 classes.zip + FLZD 解码）
+
+对齐判定：伪码标签个数 == Tufa.literals(method) 个数（per-method、0-based、字节码顺序）。
+个数不等整条丢弃，不补齐。对齐后另做值级校验（标签自带的数字 vs 同一序号的字节码值，
+允许一元负号 NEG 与 int↔float32 转换）。
+
+总数字
+------
+  车辆类总数（伪码目录里对应 classes.zip 的 .java）: 1850
+  解容器/解析失败                              : 0
+  类字节码来源：快照 / zip 回退                : 1850 / 0
+  字节码里有字面量的方法数                     : 4221
+  这些方法里的字面量总数                       : 30620
+  其中伪码里找不到对应方法（丢弃）             : 0
+  逐方法比对过的方法数                         : 4221
+  对齐成功 / 失败                              : 4202 / 19
+  对齐成功率                                   : 99.5%
+  进入 JSON 的类数 / 方法数                    : 1768 / 4202
+  没有任何方法进入 JSON 的类                   : 82
+  进入 JSON 的字面量数                         : 30234
+  值级校验通过的方法 / 不通过                  : 4200 / 2
+
+本轮新增：构造器 super(...)/this(...) 前导实参补齐（规则 C）
+-----------------------------------------------------
+  为什么会有缺口：反编译器把 <init> 里的 super(...) 调用整个吞掉（整份伪码里
+  不出现 `super` 字样），伪码标签就比字节码字面量少。913 个丢弃方法里：
+    差 +1 : 855 个构造器（= 被吞掉的 super(stage) 那一个实参）
+    差 +3 : 50 个构造器（= super(stage, 1.0, 0.5) 三个实参，全是 INitrous 子类）
+    其余 8 个（+31 / +39 / -2）不是丢实参（反编译失败 / 乱码伪码 / 乘数编在
+    指令 payload 里），明确**不补**，继续留空。
+  补出来的标签沿用伪码实参标签的命名：`<父类短名>.<init>#参数N`
+  （例：Hatch_S2_IEngine_stage_I.<init> → IEngine.<init>#参数1）。
+  闸门（逐层，任一不过 -> 整条不补、方法继续留空；补出来的必须每条都过）：
+    S1 记录能解开，且第一条 invokespecial <init>(0x11) 之前的字面量恰好 k 个（k=缺口）
+    S2 该 <init> 的 owner = 本类父类（CLSS 里的那个引用；this(...) 委托时是本类）
+    S3 描述符前 k 个形参类型与这 k 个字面量类型逐位一致（I/S/B/C/Z↔int，F↔float）
+    V1 第 1 个前导实参的预测值来自**类名**层级记号（*_stage_I/II/III/IV/WB = 1..5，
+       *_stock = 0，ISticker_*_NN = NN）——不看字节码，只跟字节码比
+    V2 第 2..k 个前导实参的预测值来自同一父类构造器约定的**跨车体常量表**
+       （leave-one-group-out：排除本方法所在的 car/body，别的车体必须众口一致、
+        至少 3 条贡献；有歧义就不给预测值）
+    V3 每个预测值与同一序号的字节码字面量逐个比对（value_matches 容差：一元负号 /
+       int↔float32 / 伪码 7 位有效数字），**有一条不符就整条丢弃**
+    补完后整条（含原有伪码标签）还要再过一次完整值级校验。
+
+  尝试补齐的构造器           : 905 （差 +1: 855，差 +3: 50）
+  补成功并进入 JSON 的方法   : 894 （差 +1: 844，差 +3: 50）
+  本轮新增字面量             : 2017
+  补完后又被值级校验打回的    : 0
+
+  被闸门拒绝的原因分布
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 380.0 不符 2
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 350.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 1 不符    1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 390.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 386.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 330.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 360.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 378.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 366.0 不符 1
+    V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 328.0 不符 1
+  被拒绝的样例（car/body、类、描述符、字节码字面量数、缺口、伪码标签、字节码值）
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 350.0 不符] ('Fantasy_Corus_2005', 'hatch', 'Hatch_S2_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [350.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 1 不符] ('Fantasy_Quaddro_1994', 'coupe', 'Coupe_SD_T5_ISideskirts_stock', '<init>', '()', 1, 1, [], [1])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 390.0 不符] ('Fantasy_Quaddro_1994', 'coupe', 'Coupe_SD_T5_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [390.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 380.0 不符] ('Fujin_MX_2006', 'sedan', 'Sedan_MX_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [380.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 386.0 不符] ('Hornet_Wega_2006', 'sedan', 'Sedan_Wega_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [386.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 330.0 不符] ('NSR_Desert_2003', 'sedan', 'Sedan_DesertS_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [330.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 360.0 不符] ('Phoenix_Trend_1983', 'hatch', 'Hatch_Trend_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [360.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 378.0 不符] ('Raptor_ZX_1997', 'coupe', 'Coupe_ZX_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [378.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 366.0 不符] ('Takura_Cyclone_2004', 'hatch', 'Hatch_CycloneR_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [366.0])
+    [V3: 第 1 个前导实参预测值 0（类名层级记号）与字节码 328.0 不符] ('Takura_Tornado_2002', 'coupe', 'Coupe_TornadoR_ISteeringWheel_stock', '<init>', '()', 1, 1, [], [328.0])
+
+  补成功的样例（car/body、类、缺口、补出来的标签、对应的字节码字面量）
+    Fantasy_Corus_2005/hatch Hatch_S2_IEngine_stage_I <init>  k=1  ['IEngine.<init>#参数1']  vals=[1]
+    Fantasy_Corus_2005/hatch Hatch_S2_IEngine_stage_II <init>  k=1  ['IEngine.<init>#参数1']  vals=[2]
+    Fantasy_Corus_2005/hatch Hatch_S2_IEngine_stage_III <init>  k=1  ['IEngine.<init>#参数1']  vals=[3]
+    Fantasy_Corus_2005/hatch Hatch_S2_IEngine_stage_IV <init>  k=1  ['IEngine.<init>#参数1']  vals=[4]
+    Fantasy_Corus_2005/hatch Hatch_S2_IEngine_stage_WB <init>  k=1  ['IEngine.<init>#参数1']  vals=[5]
+    Fantasy_Corus_2005/hatch Hatch_S2_IEngine_stock <init>  k=1  ['IEngine.<init>#参数1']  vals=[0]
+    Fantasy_Corus_2005/hatch Hatch_S2_IF_Bumper_style_I <init>  k=1  ['IF_Bumper.<init>#参数1']  vals=[1]
+    Fantasy_Corus_2005/hatch Hatch_S2_IF_Bumper_style_II <init>  k=1  ['IF_Bumper.<init>#参数1']  vals=[2]
+    Fantasy_Corus_2005/hatch Hatch_S2_IF_Bumper_style_III <init>  k=1  ['IF_Bumper.<init>#参数1']  vals=[3]
+    Fantasy_Corus_2005/hatch Hatch_S2_IF_Bumper_style_IV <init>  k=1  ['IF_Bumper.<init>#参数1']  vals=[4]
+    Fantasy_Corus_2005/hatch Hatch_S2_IF_Bumper_style_WB <init>  k=1  ['IF_Bumper.<init>#参数1']  vals=[5]
+    Fantasy_Corus_2005/hatch Hatch_S2_IHood_style_I <init>  k=1  ['IHood.<init>#参数1']  vals=[1]
+    Fantasy_Corus_2005/hatch Hatch_S2_IHood_style_II <init>  k=1  ['IHood.<init>#参数1']  vals=[2]
+    Fantasy_Corus_2005/hatch Hatch_S2_IHood_style_III <init>  k=1  ['IHood.<init>#参数1']  vals=[3]
+  补完后值级校验不通过的样例（若有）
+  未被补上的 +1/+3 构造器合计 : 11 条（原因分布见上；差 +3 且原因是
+  V2 无预测值的，说明该父类构造器约定在别的车体里没有一致的常量可依据）
+
+覆盖率前后对比（before = 同一脚本同一数据、把规则 C 关掉跑的那一轮）
+-----------------------------------------------------------
+  方法级（对齐成功 / 逐方法比对过）   : 3308/4221 = 78.4%  ->  4202/4221 = 99.5%
+  字面量级（进入 JSON / 字节码字面量） : 28217/30620 = 92.2%  ->  30234/30620 = 98.7%
+  进入 JSON 的类数 / 方法数           : 1392 / 3308  ->  1768 / 4202
+  仍失败的方法数                     : 913  ->  19
+  本轮新增方法数                     : 894
+  本轮新增字面量数                   : 2017
+
+覆盖率（对齐成功的方法里，标签不是 ? 的比例）
+-------------------------------------------
+  有标签的字面量 30234 / 30234 = 100.0%
+
+标签种类分布（进入 JSON 的所有标签）
+----------------------------------
+  <被调用者>#参数N（调用实参字面量）                13419   44.4%
+  <字段名>（引擎参数）                        11083   36.7%
+  <字段>#下标（数组下标字面量）                    2125    7.0%
+  数组长度                                1503    5.0%
+  case值（switch 分支）                    1247    4.1%
+  返回值                                  857    2.8%
+
+字段名覆盖率（标签直接给出字段名/字段下标的字面量）
+----------------------------------------------
+  <字段名> 11083 / 30234 = 36.7%；<字段>#下标 2125；其余是调用实参/数组长度/分支值/返回值/? 
+
+按车体细分（Car/body）
+---------------------
+  车辆/车体                          类数     有字面量     对齐成功       失败  JSON字面量
+  Fantasy_Corus_2005/hatch      185      415      414        1     2715
+  Fantasy_Quaddro_1994/coupe    182      416      413        3     3215
+  Fujin_MX_2006/sedan           183      418      414        4     3372
+  Hornet_Wega_2006/sedan        183      416      414        2     3397
+  NSR_Desert_2003/sedan         182      413      411        2     2687
+  Phoenix_RS_1997/coupe         192      445      443        2     3148
+  Phoenix_Trend_1983/hatch      180      411      410        1     2704
+  Raptor_ZX_1997/coupe          184      419      417        2     3374
+  Takura_Cyclone_2004/hatch     184      418      417        1     2733
+  Takura_Tornado_2002/coupe     195      450      449        1     2889
+
+失败分布（丢弃的方法）
+---------------------
+  个数差 +1（构造器补齐未通过）             11
+  个数差 +31                      5
+  个数差 -2                       2
+  个数差 +39                      1
+  其中构造器(<init>/<clinit>)被丢弃: 14（占失败 73.7%）
+
+失败最多的 (个数差, 方法名)
+--------------------------
+    +1  <init>                   11
+   +31  static_getBoneAssigns    5
+    -2  <init>                   2
+   +39  <init>                   1
+
+失败样例（类/方法/字节码字面量数/字节码值前缀/伪码标签前缀）
+--------------------------------------------------------
+  [d+1] ('Hatch_S2_ISteeringWheel_stock', '<init>', '()', 1, [350.0], [])
+  [d+31] ('Coupe_SD_T5_Rim_ST', 'static_getBoneAssigns', '([F)[Ljava.util.BoneAssign;', 31, [3, 0, 25.4, 5.0, 1000.0, 2.0, 1, 17.95, 2, 1000.0, 0, 0.0, 0.0, 1.0], [])
+  [d-2] ('Sedan_MX_IRunningGear_stage_IV', '<init>', '()', 20, [4, 5.5, 2.5, 5.2, 2.5, 2.8, 2.7, 1900, 3, 0, 500, 3200, 0.25, 1600], ['mass_Fsusp', 'mass_Fcoil', 'mass_Rsusp', 'mass_Rcoil', 'mass_F', 'mass_R', 'DTbrak_F', 'DTbrak_F', '数组长度', 'EBDParams_F[0]#下标', 'EBDParams_F[0]', 'EBDParams_F[1]', 'EBDParams_F[2]', 'DTbrak_R'])
+  [d+39] ('IVehicle_Coupe_RS', '<init>', '()', 179, [3810, 8900, 536870967, 536870937, 536870978, 536870982, 536870965, 536870917, 536870933, 536870953, 536870946, 536870984, 536870951, 536870988], ['minPrestige', 'maxPrestige', 'perfectTuning[4]', 'perfectTuning[5]', 'perfectTuning[6]', 'perfectTuning[12]', 'perfectTuning[13]', 'perfectTuning[20]', 'perfectTuning[22]', '数组长度', 'dropTable[0]', 'dropTable[1]', 'dropTable[2]', 'dropTable[3]'])
+
+对齐成功的方法里 ? 标签最大的来源行（形状归一化）
+-----------------------------------------------
+  （本次没有任何标签落到 ?：认不出的行基本都落进了「谁#参数N」/「字段#下标」）
+
+值级校验不通过的方法（全部）
+---------------------------
+  ('Hatch_Trend_IEngine_stock', 'eRPMs', 10, 13, [11, 0, 0, 1908, 3294, 4238, 5280, 6974, 7974, 9970], ['数组长度', 'local0[0]#下标', 'local0[0]', 'local0[1]', 'local0[2]', 'local0[3]', 'local0[4]', 'local0[5]', 'local0[6]', 'local0[7]'], ['11', '0', '0', '954', '1647', '2119', '2640', '3487', '3987', '4985'])
+  ('Hatch_Trend_IEngine_stock', 'eMuls', 10, 13, [11, 0, 0, 196, 222, 236, 256, 276, 284, 290], ['数组长度', 'local0[0]#下标', 'local0[0]', 'local0[1]', 'local0[2]', 'local0[3]', 'local0[4]', 'local0[5]', 'local0[6]', 'local0[7]'], ['11', '0', '0', '98', '111', '118', '128', '138', '142', '145'])
+
+键冲突
+------
+  类短名在不同车体下重名（JSON 键已改成 <Car>/<body>/<Class>）：0
+  同类里同名（不同签名）方法冲突（键已加 desc）：0
+
+规则来源（都在本轮实测里反复对过）
+----------------------------------
+1) `X = new <类型>[N];`：N 是字面量，字节码顺序 `INT N; NEWARRAY`；
+   例 Coupe_RS_IEngine_stock.eRPMs off=1 INT 13 → 0x22。
+2) `localK = {v0,v1,...};`：字节码先把值压栈、再压长度（`FLOAT 38.0,4.5,0.85,0.0;
+   INT 4; 0x22; 0x24`），所以长度标签排在值后面；宿主字段来自紧跟的 `X.f = localK;`。
+   长度值 = 元素个数（字符串元素也算），例如 Hatch_S2_IRims_stock.Rims() 的 8 个字符串
+   → 字节码 FLOAT/INT 8，与 `数组长度` 对齐。
+3) `X.f[i] = v`：目标数组是 this 的字段或本方法新建的数组时，最内层下标被编进
+   0x1C 指令 payload，只有链上第一笔（或「浮点值且上一笔不是整数值」）会显式压下标；
+   目标是别的对象的字段（local0.turboTable[i]）时每笔都压下标：
+     initPowerCharacter  turboTable 32 笔 = 32 下标 + 32 值（全浮点）
+     IRunningGear_stock.<init> EBDParams_F 3 笔 = 1 下标 + 3 值（整数,整数,浮点）
+     Coupe_SD_T5_IMuffler_stage_I.RPMs 3 笔 = 3 下标 + 3 值（全浮点）
+     Coupe_RS_IEngine_stock.eRPMs 13 笔 = 1 下标 + 13 值（全整数）
+   开关实测：--set index_model=first_only 对齐数 3308→3203（更差）。
+4) 多维 `X.f[i][j] = v`：外层下标 i 每笔都压，内层 j 只在链上第一笔压：
+     Model_Coupe_RS.<init> axleLoadDegradationAtBodyStage 10 笔 = 10 外下标 + 1 内下标
+     + 10 值 = 21，与实测一致。开关实测：--set outer_index_always=false 3308→3288。
+5) `case N:` 的 N 是字面量（switch 编译成「压 case 值 + 比较」）：算进去 3308，
+   不算 3288；所以默认算，标签给 `case值`。
+6) 反编译器把 `x = f(n); if ((f(n) != null))` 里的调用重复打印了一遍，
+   上一行刚把同一表达式赋给局部量时，if 行里的数字不再算字面量（救回 20 个方法）。
+
+丢弃方法的原因分类（逐类都给过样例）
+-----------------------------------
+  a) 构造器 super(...) 实参被反编译器吞掉：例如 Hatch_S2_IEngine_stage_I.<init>
+     字节码 `INT 1 → IEngine.<init>(I)`，伪码只剩 `initStock(local0);`，个数必然不等。
+     该类别 = 失败的大头；本轮已由「规则 C」补上并通过值级校验，见上面那一节。
+  a2) 缺口 +1/+3 但过不了规则 C 闸门（没有独立预测值 / 预测值与字节码不符）：
+     例如 Hatch_S2_ISteeringWheel_stock 类名说 stock=0，字节码第 1 个实参是 FLOAT 350.0；
+     Coupe_SD_T5_ISideskirts_stock 同理（1 != 0）。这类继续留空，不硬补。
+  b) 整个方法体被吞：Hatch_S2_INitrous_stage_I.<init> 伪码只有 `return;`，
+     字节码还有 3 个字面量（super 的 stage 号 + 1.0 + 0.5）。
+  c) 反编译失败：Coupe_SD_T5_Rim_ST.static_getBoneAssigns 头部带
+     `[stack analysis failed: unreachable]`，正文只写 `return null;`，
+     真正代码只在 `// ---- N block(s) not reached` 注释里（该注释不是伪码行，未解析）。
+  d) 伪码乱码：IVehicle_Coupe_RS.<init> 的数组字面量里混进 `None.xxx [I` 这种
+     不成对类型描述符，值级校验也会抓到错位（这类方法本来就对不齐，被丢弃）。
+  e) 乘数编在指令 payload 里：Sedan_MX_IRunningGear_stage_IV.<init> 的
+     `this.DTbrak_F = (((F)1900) * 1.25);` 只有 1900 是字面量，
+     1.25 在 0x1C 的 payload（pay=2684354566=0xA0000006，高位就是 1.25 的 float 高位）里。
+
+标签词表（给 UI 用）
+----------------
+  engine_volume / redline / …   字段名：直接就是被写的引擎字段（规则 1）
+  turboTable[4]               字段的数组元素（规则 2/3；i 是伪码里写的下标）
+  EBDParams_F[0]#下标          同一条写入指令显式压的下标字面量
+  数组长度                     `new T[n]` / 数组初始化里的长度字面量（规则 4）
+  local3[2]                   数组没落到任何字段上（比如直接 return），只能用局部量名
+  configureVisual#参数3        某个调用的第 3 个实参
+  IEngine.<init>#参数1        「规则 C」补的 super(...)/this(...) 前导实参（被吞掉的）
+  case值                      switch 的 case N 值
+  返回值                       return 语句里直接返回的字面量
+  ?                          认不出来（本轮 0 个）
+
+不确定处（逐条）
+----------------
+  1. "<被调用者>#参数N"（占标签大头）只表示「这一行的第 N 个实参」，不是引擎字段名；
+     实参位置的判定基于伪码的调用括号，值级校验只能保证顺序/取值一致，
+     不能保证语义（同一位置多个 0.0 时看不出来）。
+  2. "<字段>#下标" 表示「写这个元素时编译器显式压了的下标字面量」，
+     下标何时显式压是按实测模型推的（见规则 3/4），个别类可能有偏差——
+     但凡偏差都会让个数不等而被丢掉，不会静默错位。
+  3. 少数类的伪码与字节码不同步：Hatch_Trend_IEngine_stock 的 eRPMs/eMuls
+     伪码值是字节码的一半（954 vs 1908…），值级校验能抓到；这两条方法仍在 JSON 里
+     （个数相等、标签描述的是「数组第 i 项」这一位置语义），但它的数值不可信。
+  4. 二维 `int[][]` 数组字面量的长度占位在字节码里是 -1（真长度在 0x24 payload），
+     这类位置的值级校验按例外放行（IVehicle_Hatch_S2.<init> 的 stylingIDs）。
+  5. 伪码打印只有约 7 位有效数字（4.28 对应字节码 4.279999732971191），
+     值级校验用 1e-6 相对容差，所以「相邻两个字面量数值很接近」的错位抓不出来（少见）。
+  6. 只覆盖 vehicles/<Car>/<body>/classes.zip 下的 1850 个类；
+     out_pseudo 里另外 34 个（vehicles/classes 等）不在本次范围。
+  7. 「规则 C」补出来的 `<父类>.<init>#参数N`：第 1 个实参的数值由**类名层级记号**
+     预测（与字节码独立），第 2..k 个由**别的车体**在同一父类构造器约定里压过的
+     常量预测（leave-one-group-out）。因此：单个类或单个车体偏离一定会被逐条比对
+     抓住；但若**所有车体**在同一个约定上都用错值（例如 INitrous 的 1.0/0.5 若有
+     系统性偏差），本闸门看不出来 —— 这两条是那份 50 条 +3 的唯一薄弱点，已明示。
+     结构层（前导字面量个数 / 位置 / owner / 形参类型）是逐条从字节码证明的，不依赖预测。
