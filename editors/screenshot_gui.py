@@ -60,26 +60,63 @@ def pump(root, n=20, dt=0.04):
         time.sleep(dt)
 
 
+def select_tab(root, want):
+    """按标签文字选中 Notebook 的一页（在整棵控件树里找 TNotebook）。"""
+    stack = [root]
+    while stack:
+        w = stack.pop()
+        try:
+            kids = w.winfo_children()
+        except Exception:  # noqa: BLE001
+            continue
+        if w.winfo_class() == "TNotebook" and want:
+            for t in w.tabs():
+                if want in w.tab(t, "text"):
+                    w.select(t)
+                    return True
+        stack.extend(kids)
+    return False
+
+
 def main():
     tool = sys.argv[1] if len(sys.argv) > 1 else "vehicle"
     out = sys.argv[2] if len(sys.argv) > 2 else "shot.png"
+    tab = None
+    for a in sys.argv[1:]:
+        if a.startswith("--tab="):
+            tab = a.split("=", 1)[1]
     if tool == "vehicle":
         spec = importlib.util.spec_from_file_location(
             "vedit", HERE / "vehicle_editor.pyw")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         root = tk.Tk()
+        root.geometry("1180x760")
         app = mod.App(root)
         pump(root)
-        car = sys.argv[3] if len(sys.argv) > 3 else "Phoenix_RS_1997"
+        car = sys.argv[3] if len(sys.argv) > 3 and not sys.argv[3].startswith("-") \
+            else "Phoenix_RS_1997"
         names = [app.lb_car.get(i) for i in range(app.lb_car.size())]
         if car in names:
             app.lb_car.selection_set(names.index(car))
             app.on_car()
             pump(root)
-            app.var_filter.set(sys.argv[4] if len(sys.argv) > 4 else "IEngine")
+            flt = sys.argv[4] if len(sys.argv) > 4 \
+                and not sys.argv[4].startswith("-") else "IEngine"
+            app.var_filter.set(flt)
             pump(root)
-            app.lb_part.selection_set(0)
+            # 选哪一个：默认挑「零件类」（同名 Item 类没有数据）；可用 --part= 精确指定
+            exact = None
+            for a in sys.argv[1:]:
+                if a.startswith("--part="):
+                    exact = a.split("=", 1)[1]
+            names_p = [app.lb_part.get(i) for i in range(app.lb_part.size())]
+            if exact and exact in names_p:
+                idx = names_p.index(exact)
+            else:
+                cand = [i for i, n in enumerate(names_p) if "_I" not in n[:16]]
+                idx = (cand or [0])[0]
+            app.lb_part.selection_set(idx)
             app.on_part()
             pump(root, 30)
     else:
@@ -88,16 +125,42 @@ def main():
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         root = tk.Tk()
+        root.geometry("1180x760")
         app = mod.App(root)
-        if len(sys.argv) > 3:
+        if len(sys.argv) > 3 and not sys.argv[3].startswith("-"):
             app.var_path.set(sys.argv[3])
             app.load()
-        pump(root, 30)
+        pump(root, 20)
+        demo = any(a == "--demo" for a in sys.argv[1:])
+        if demo and app.s is not None:
+            # 截图用演示数据：只在**临时副本**上做（改昵称/加车/加零件），绝不碰真实存档
+            from lasr_core import savefile as _sf
+            app.s["nickName"] = "Demo Driver"
+            app.s["prestige"] = 1234
+            app.s["winSum"], app.s["raceSum"] = 12, 15
+            _sf.save(app.s, sys.argv[3], backup=False)
+            app.load()
+            pump(root, 10)
+            for v in (8, 5):
+                app.var_add_car.set("%d = %s" % (v, _sf.vehicle_name(v)))
+                app.add_car()
+            pump(root, 6)
+            kids = app.tv_cars.get_children()
+            if kids:
+                app.tv_cars.selection_set(kids[0])
+                pump(root, 4)
+                for case in (5, 81, 2053):
+                    app.var_case.set(str(case))
+                    app.add_part(1)
+            pump(root, 10)
+        pump(root, 10)
+    select_tab(root, tab)
     root.update_idletasks()
+    pump(root, 12)
     hwnd = user32.GetAncestor(root.winfo_id(), 2)
     root.lift()
     root.attributes("-topmost", True)
-    pump(root, 10)
+    pump(root, 14)
     grab(hwnd, out)
     print("saved", out)
     root.destroy()

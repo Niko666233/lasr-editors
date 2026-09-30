@@ -31,6 +31,21 @@
 
 两个工具都会在写盘前自动备份（`<文件>.bak`），并可一键恢复；界面里直接显示备份的时刻与大小。
 
+## 界面
+
+车辆数据修改器 —— 曲线页（引擎扭矩曲线 `eRPMs`/`eMuls`，可单点改、整条 ×系数）：
+
+![车辆数据修改器：曲线页](screenshots/vehicle-1-curve.png)
+
+车辆数据修改器 —— 字符串参数页（`configureType` 里的 ★质量 kg / 气动 / 挂点；这张是减重件
+`WeightReduction_stage_I`，第 2 行 `body` 的 ★质量就是它的减重后车重）：
+
+![车辆数据修改器：字符串参数页](screenshots/vehicle-2-strings.png)
+
+存档修改器 —— 车辆与零件页（**演示数据**，不是任何人的真实存档）：
+
+![存档修改器：车辆与零件](screenshots/save-1-cars.png)
+
 ## 快速开始
 
 需要 64 位 Python 3.11+（含 `tkinter`，官方安装包自带）。
