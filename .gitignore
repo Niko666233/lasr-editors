@@ -16,3 +16,4 @@ selftest_report.txt
 *_error.txt
 out_vehicle_zip_test.zip
 *.tmp
+editors/data/classes_manifest.json
